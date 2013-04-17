@@ -26,8 +26,8 @@ import java.util.List;
 /**
  * Computes the list of main source files to instrument.
  */
-public class MainCloverSourceScanner extends AbstractCloverSourceScanner {
-    public MainCloverSourceScanner(final CompilerConfiguration configuration, final String outputSourceDirectory) {
+public class MainSourceScanner extends AbstractSourceScanner {
+    public MainSourceScanner(final CompilerConfiguration configuration, final String outputSourceDirectory) {
         super(configuration, outputSourceDirectory);
     }
 

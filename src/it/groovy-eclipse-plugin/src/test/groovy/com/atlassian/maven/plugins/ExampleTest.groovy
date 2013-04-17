@@ -3,10 +3,11 @@ package com.atlassian.maven.plugins
 import groovy.util.GroovyTestCase
 
 /**
- * Tests for the {@link Example} class.
+ * Tests for the {@link GroovyExample} class.
  */
 class ExampleTest extends GroovyTestCase {
     void testShow() {
-        new Example().show()
+        new GroovyExample().show()
+        new JavaExample().show()
     }
 }

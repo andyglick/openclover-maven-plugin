@@ -22,6 +22,9 @@ package com.atlassian.maven.plugin.clover.internal.instrumentation;
 import com.atlassian.maven.plugin.clover.MvnLogger;
 import com.atlassian.maven.plugin.clover.internal.CompilerConfiguration;
 import com.atlassian.maven.plugin.clover.internal.scanner.CloverSourceScanner;
+import com.atlassian.maven.plugin.clover.internal.scanner.GroovyMainSourceScanner;
+import com.atlassian.maven.plugin.clover.internal.scanner.GroovyTestSourceScanner;
+import com.atlassian.maven.plugin.clover.internal.scanner.LanguageFileExtensionFilter;
 import com.cenqua.clover.CloverInstr;
 import com.cenqua.clover.Logger;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -53,27 +56,47 @@ public abstract class AbstractInstrumenter {
         return this.configuration;
     }
 
+    /**
+     *
+     * @throws MojoExecutionException
+     * @see com.atlassian.maven.plugin.clover.CloverInstrumentInternalMojo#calcIncludedFilesForGroovy()
+     * @see com.atlassian.maven.plugin.clover.CloverInstrumentInternalMojo#redirectOutputDirectories()
+     */
     public void instrument() throws MojoExecutionException {
         final CloverSourceScanner scanner = getSourceScanner();
-        final Map<String, String[]> filesToInstrument = scanner.getSourceFilesToInstrument();
-        if (filesToInstrument.isEmpty()) {
+
+        // get source files to be instrumented, but only for Java as they will be instrumented by CloverInstr
+        final Map javaFilesToInstrument = scanner.getSourceFilesToInstrument(LanguageFileExtensionFilter.JAVA_LANGUAGE);
+        if (javaFilesToInstrument.isEmpty()) {
             getConfiguration().getLog().info("No Clover instrumentation done on source files in: "
-                    + getCompileSourceRoots() + " as no matching sources files found");
-
+                    + getCompileSourceRoots() + " as no matching sources files found (JAVA_LANGUAGE)");
         } else {
-            instrumentSources(filesToInstrument, outputSourceDirectory);
-
+            instrumentSources(javaFilesToInstrument, outputSourceDirectory);
         }
 
-        // We need to copy excluded files as otherwise they won't be in the new Clover source directory and
+        // in case when 'src/main/java' (or 'src/test/java') contains *.groovy source files (this is a trick possible
+        // with a groovy-eclipse-plugin, see http://groovy.codehaus.org/Groovy-Eclipse+compiler+plugin+for+Maven
+        // "Setting up source folders / Do nothing") we must copy *.groovy files as well
+        // reason: 'src/main/java' (or 'src/test/java') will be redirected to 'target/clover/src-instrumented'
+        // (or 'target/clover/src-test-instrumented') and Groovy compiler must be able to find these groovy sources
+        final Map/*<String,String[]>*/ groovyFilesToInstrument = scanner.getSourceFilesToInstrument(LanguageFileExtensionFilter.GROOVY_LANGUAGE);
+        // don't copy files from 'src/main/groovy' and 'src/test/groovy' because these source roots are not being redirected
+        GroovyMainSourceScanner.removeOwnSourceRoots(groovyFilesToInstrument.keySet());
+        GroovyTestSourceScanner.removeOwnSourceRoots(groovyFilesToInstrument.keySet());
+        if (!groovyFilesToInstrument.isEmpty()) {
+            copyExcludedFiles(groovyFilesToInstrument, outputSourceDirectory);
+        }
+
+        // We need to copy excluded files too as otherwise they won't be in the new Clover source directory and
         // thus won't be compiled by the compile plugin. This will lead to compilation errors if any other
-        // Java file depends on any of these excluded files.
-
+        // file depends on any of these excluded files.
         if (configuration.copyExcludedFiles()) {
-            copyExcludedFiles(scanner.getExcludedFiles(), outputSourceDirectory);
+            final Map/*<String,String[]>*/ explicitlyExcludedFiles = scanner.getExcludedFiles();
+            // avoid having the same excluded file in two locations (in 'src/xxx/groovy' and 'src-xxx-instrumented')
+            GroovyMainSourceScanner.removeOwnSourceRoots(explicitlyExcludedFiles.keySet());
+            GroovyTestSourceScanner.removeOwnSourceRoots(explicitlyExcludedFiles.keySet());
+            copyExcludedFiles(explicitlyExcludedFiles, outputSourceDirectory);
         }
-
-        //won't do its job when include files set is empty!
     }
 
     public String redirectSourceDirectories() {
@@ -108,12 +131,17 @@ public abstract class AbstractInstrumenter {
 
         for (final String sourceRoot : sourceRoots) {
             if (new File(oldSourceDirectory).exists() && sourceRoot.equals(oldSourceDirectory)) {
+                // add redirected location (e.g. 'src/main/java' -> 'target/clover/src-instrumented') instead of the
+                // original source root
                 addCompileSourceRoot(getSourceDirectory());
             }
-            // ignore the generated sources directory, because a new clover/generated-sources directory has been created by a plugin
-            // during the clover forked lifecycle, which means that we will end up with the same classes included twice
-            // if we use the generated-classes directory added originally
-            else if (!isGeneratedSourcesDirectory(sourceRoot) && !getConfiguration().includesAllSourceRoots()) {
+
+            else if ( !(getConfiguration().includesAllSourceRoots() && isGeneratedSourcesDirectory(sourceRoot)) )
+            {
+                // if includeAllSourceRoots=true then ignore the original generated sources directory (e.g. target/generated/xyz),
+                // because Clover will instrument them and store instrumented version (e.g. target/clover/src-instrumented);
+                // compiler should know only the latter location, otherwise we would end up with the same classes included twice
+                // (one with and one without Clover instrumentation)
                 addCompileSourceRoot(sourceRoot);
             }
         }
@@ -124,8 +152,10 @@ public abstract class AbstractInstrumenter {
     }
 
     private boolean isGeneratedSourcesDirectory(final String sourceRoot) {
-        String generatedSourcesDirectoryName = File.separator + "target" + File.separator + "generated-sources";
-        return sourceRoot.indexOf(generatedSourcesDirectoryName) != -1;
+        String generatedSrcDirDefaultLifecycle = File.separator + "target" + File.separator + "generated-sources";
+        String generatedSrcDirCloverLifecycle = File.separator + "target" + File.separator + "clover" + File.separator + "generated-sources";
+        return sourceRoot.indexOf(generatedSrcDirDefaultLifecycle) != -1
+                || sourceRoot.indexOf(generatedSrcDirCloverLifecycle) != -1;
     }
 
     private void logSourceDirectories() {

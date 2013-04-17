@@ -26,8 +26,8 @@ import java.util.List;
 /**
  * Computes the list of test source files to instrument.
  */
-public class TestCloverSourceScanner extends AbstractCloverSourceScanner {
-    public TestCloverSourceScanner(final CompilerConfiguration configuration, final String outputSourceDirectory) {
+public class TestSourceScanner extends AbstractSourceScanner {
+    public TestSourceScanner(final CompilerConfiguration configuration, final String outputSourceDirectory) {
         super(configuration, outputSourceDirectory);
     }
 
