@@ -21,13 +21,11 @@ package com.atlassian.maven.plugin.clover;
 
 import com.atlassian.maven.plugin.clover.internal.AbstractCloverInstrumentMojo;
 import org.apache.maven.plugin.MojoExecutionException;
-import com.atlassian.maven.plugin.clover.internal.AbstractCloverMojo;
 
 /**
  * <p>Fork a custom build lifecycle in which all sources will be instrumented by Clover and next execute this
  * lifecycle till the <code>install</code> phase. All instrumented classes will be stored in a separate directory. Similarly,
  * artifacts produced will have the 'clover' classifier.</p>
- *
  * <p>This goal is forking a lifecycle because we don't want the Clover instrumentation to affect the main lifecycle
  * build. This will prevent instrumented sources to be put in production by error. Thus running
  * <code>mvn install</code> on a project where this <code>instrument</code> goal has been specified will run the
@@ -53,16 +51,25 @@ import com.atlassian.maven.plugin.clover.internal.AbstractCloverMojo;
  *
  * @goal instrument
  * @execute phase="install" lifecycle="clover"
- *
  */
-public class CloverInstrumentMojo extends AbstractCloverInstrumentMojo
-{
+public class CloverInstrumentMojo extends AbstractCloverInstrumentMojo {
+
     /**
      * {@inheritDoc}
+     *
      * @see com.atlassian.maven.plugin.clover.internal.AbstractCloverMojo#execute()
      */
-    public void execute()
-        throws MojoExecutionException
-    {
+    public void execute() throws MojoExecutionException {
+        super.execute();
+    }
+
+    @Override
+    protected boolean shouldRedirectArtifacts() {
+        return true;
+    }
+
+    @Override
+    protected boolean shouldRedirectOutputDirectories() {
+        return true;
     }
 }
