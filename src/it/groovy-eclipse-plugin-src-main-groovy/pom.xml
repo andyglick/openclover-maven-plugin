@@ -19,7 +19,7 @@
         <groovy.eclipse.batch>RELEASE</groovy.eclipse.batch>
         <groovy.eclipse.compiler>RELEASE</groovy.eclipse.compiler>
         <clover.version>4.2.0-SNAPSHOT</clover.version>
-        <junit.version>4.11</junit.version>
+        <junit.version>4.13.1</junit.version>
     </properties>
     <dependencies>
         <dependency>
